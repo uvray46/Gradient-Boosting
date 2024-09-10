@@ -1,0 +1,196 @@
+# Importing necessary libraries
+import pandas as pd
+import numpy as np
+import scipy
+import matplotlib.pyplot as plt
+from sklearn import tree
+from IPython.display import Image
+%matplotlib inline
+from sklearn import preprocessing
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.model_selection import train_test_split
+
+# Loading the dataset
+file_path = r"C:\Users\jwhit\OneDrive\Documents\Data Science Course\Gradient Boosting\titanic.csv"
+df = pd.read_csv(file_path)
+
+# Display first few rows to ensure the data is loaded correctly
+df.head()
+
+# Generating random data
+np.random.seed(42)
+X = np.random.rand(100, 1) - 0.5
+y = 3 * X[:, 0]**2 + 0.05 * np.random.randn(100)
+
+# Decision Tree Regressor 1 (First model)
+tree_reg1 = DecisionTreeRegressor(max_depth=2, random_state=42)
+tree_reg1.fit(X, y)
+
+# Model details for reference
+DecisionTreeRegressor(ccp_alpha=0.0, criterion='squared_error', max_depth=2,
+                      max_features=None, max_leaf_nodes=None,
+                      min_impurity_decrease=0.0, 
+                      min_samples_leaf=1, min_samples_split=2,
+                      min_weight_fraction_leaf=0.0, random_state=42, splitter='best')
+
+
+# Training a second Decision Tree Regressor on the residual errors
+y2 = y - tree_reg1.predict(X)  # Residual errors
+tree_reg2 = DecisionTreeRegressor(max_depth=2, random_state=42)
+tree_reg2.fit(X, y2)
+
+# Model details for reference
+DecisionTreeRegressor(ccp_alpha=0.0, criterion='squared_error', max_depth=2,
+                      max_features=None, max_leaf_nodes=None,
+                      min_impurity_decrease=0.0,
+                      min_samples_leaf=1, min_samples_split=2,
+                      min_weight_fraction_leaf=0.0, random_state=42, splitter='best')
+
+# Training a third Decision Tree Regressor on the residual errors of the second predictor
+y3 = y2 - tree_reg2.predict(X)  # Residual errors of the second tree
+tree_reg3 = DecisionTreeRegressor(max_depth=2, random_state=42)
+tree_reg3.fit(X, y3)
+
+# Model details for reference
+DecisionTreeRegressor(ccp_alpha=0.0, criterion='squared_error', max_depth=2,
+                      max_features=None, max_leaf_nodes=None,
+                      min_impurity_decrease=0.0, 
+                      min_samples_leaf=1, min_samples_split=2,
+                      min_weight_fraction_leaf=0.0, random_state=42, splitter='best')
+
+# Ensemble prediction by summing up the predictions of all three trees
+X_new = np.array([[0.8]])  # New instance for prediction
+y_pred = sum(tree.predict(X_new) for tree in (tree_reg1, tree_reg2, tree_reg3))
+
+# Display the final prediction
+y_pred
+
+# Plotting function to visualize predictions and residuals
+def plot_predictions(regressors, X, y, axes, label=None, style="r-", data_style="b.", data_label=None):
+    x1 = np.linspace(axes[0], axes[1], 500)
+    y_pred = sum(regressor.predict(x1.reshape(-1, 1)) for regressor in regressors)
+    plt.plot(X[:, 0], y, data_style, label=data_label)
+    plt.plot(x1, y_pred, style, linewidth=2, label=label)
+    if label or data_label:
+        plt.legend(loc="upper center", fontsize=16)
+    plt.axis(axes)
+
+# Plotting the predictions of each tree and the ensemble model
+plt.figure(figsize=(11,11))
+
+plt.subplot(321)
+plot_predictions([tree_reg1], X, y, axes=[-0.5, 0.5, -0.1, 0.8], label="$h_1(x_1)$", style="g-", data_label="Training set")
+plt.ylabel("$y$", fontsize=16, rotation=0)
+plt.title("Residuals and tree predictions", fontsize=16)
+
+plt.subplot(322)
+plot_predictions([tree_reg1], X, y, axes=[-0.5, 0.5, -0.1, 0.8], label="$h(x_1) = h_1(x_1)$", data_label="Training set")
+plt.ylabel("$y$", fontsize=16, rotation=0)
+plt.title("Ensemble predictions", fontsize=16)
+
+plt.subplot(323)
+plot_predictions([tree_reg2], X, y2, axes=[-0.5, 0.5, -0.5, 0.5], label="$h_2(x_1)$", style="g-", data_style="k+", data_label="Residuals")
+plt.ylabel("$y - h_1(x_1)$", fontsize=16)
+
+plt.subplot(324)
+plot_predictions([tree_reg1, tree_reg2], X, y, axes=[-0.5, 0.5, -0.1, 0.8], label="$h(x_1) = h_1(x_1) + h_2(x_1)$")
+plt.ylabel("$y$", fontsize=16, rotation=0)
+
+plt.subplot(325)
+plot_predictions([tree_reg3], X, y3, axes=[-0.5, 0.5, -0.5, 0.5], label="$h_3(x_1)$", style="g-", data_style="k+")
+plt.ylabel("$y - h_1(x_1) - h_2(x_1)$", fontsize=16)
+plt.xlabel("$x_1$", fontsize=16)
+
+plt.subplot(326)
+plot_predictions([tree_reg1, tree_reg2, tree_reg3], X, y, axes=[-0.5, 0.5, -0.1, 0.8], label="$h(x_1) = h_1(x_1) + h_2(x_1) + h_3(x_1)$")
+plt.xlabel("$x_1$", fontsize=16)
+plt.ylabel("$y$", fontsize=16, rotation=0)
+
+# Show the plot
+plt.show()
+
+# Dropping any rows with missing values
+df = df.dropna()
+
+# Printing the levels of the categorical data
+print(df.select_dtypes(include=['object']).columns)
+
+# Check which columns exist in the dataframe before attempting to drop any
+print(df.columns)
+
+# Drop the 'Name', 'Cabin', and 'Ticket' columns as they are not useful for prediction
+columns_to_drop = ['Name', 'Cabin', 'Ticket']
+df = df.drop(columns=[col for col in columns_to_drop if col in df.columns], axis=1)
+
+# Creating dummy features for the remaining categorical variables
+df = pd.get_dummies(df, drop_first=True)
+
+# Dropping 'PassengerId' as it's not useful for prediction
+if 'PassengerId' in df.columns:
+    df = df.drop(['PassengerId'], axis=1)
+
+print(df.shape)
+df.head()
+
+# Print the null values for each column
+print(df.isnull().sum())
+
+# Create the X and y matrices
+# 'Survived' is the target variable, so we set it as 'y'. The remaining columns are features, which make up 'X'.
+y = df['Survived']
+X = df.drop('Survived', axis=1)
+
+# Apply the StandardScaler to the X matrix
+scaler = preprocessing.StandardScaler().fit(X)
+X_scaled = scaler.transform(X)
+
+# Check the shape of X_scaled and y to ensure they're prepared correctly
+print("Shape of X_scaled:", X_scaled.shape)
+print("Shape of y:", y.shape)
+
+# Split the X_scaled and y into 75/25 training and testing data subsets
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.25, random_state=42)
+
+learning_rates = [0.05, 0.1, 0.25, 0.5, 0.75, 1]
+for learning_rate in learning_rates:
+    gb = GradientBoostingClassifier(n_estimators=20, learning_rate=learning_rate, max_features=2, max_depth=2, random_state=0)
+    gb.fit(X_train, y_train)
+    
+    print("Learning rate: ", learning_rate)
+    print("Accuracy score (training): {0:.3f}".format(gb.score(X_train, y_train)))
+    print("Accuracy score (validation): {0:.3f}".format(gb.score(X_test, y_test)))
+    print()
+
+# Applying the best learning rate to the model and predicting on the testing set
+# Assuming the best learning rate is 0.1 based on the outputs from the loop (you can adjust this based on actual performance)
+best_gb = GradientBoostingClassifier(n_estimators=20, learning_rate=0.1, max_features=2, max_depth=2, random_state=0)
+best_gb.fit(X_train, y_train)
+
+# Predicting and evaluating the model
+y_pred = best_gb.predict(X_test)
+
+# Confusion matrix and classification report
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+# Calculate and plot ROC curve and AUC
+y_pred_proba = best_gb.predict_proba(X_test)[:, 1]  # Probability predictions for the positive class
+
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+roc_auc = auc(fpr, tpr)
+
+plt.figure()
+plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver Operating Characteristic (ROC)')
+plt.legend(loc="lower right")
+plt.show()
